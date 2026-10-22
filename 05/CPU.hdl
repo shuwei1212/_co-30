@@ -40,4 +40,129 @@ CHIP CPU {
 
     PARTS:
     // Put your code here:
+    // A-instruction: load instruction into A
+    // C-instruction: load ALU result into A when dest A is set
+    Mux16(
+        a=instruction,
+        b=aluOut,
+        sel=instruction[15],
+        out=aIn
+    );
+
+    Not(in=instruction[15], out=isAInstruction);
+    And(
+        a=instruction[15],
+        b=instruction[5],
+        out=loadAFromC
+    );
+    Or(
+        a=isAInstruction,
+        b=loadAFromC,
+        out=loadA
+    );
+
+    // A register
+    ARegister(
+        in=aIn,
+        load=loadA,
+        out=aReg,
+        out[0..14]=addressM
+    );
+
+    // D register: dest D
+    And(
+        a=instruction[15],
+        b=instruction[4],
+        out=loadD
+    );
+
+    DRegister(
+        in=aluOut,
+        load=loadD,
+        out=dReg
+    );
+
+    // ALU y input: A register or memory
+    Mux16(
+        a=aReg,
+        b=inM,
+        sel=instruction[12],
+        out=aluY
+    );
+
+    // ALU
+    ALU(
+        x=dReg,
+        y=aluY,
+        zx=instruction[11],
+        nx=instruction[10],
+        zy=instruction[9],
+        ny=instruction[8],
+        f=instruction[7],
+        no=instruction[6],
+        out=aluOut,
+        zr=zr,
+        ng=ng
+    );
+
+    // Pass ALU result to outM
+    And16(
+        a=aluOut,
+        b[0..15]=true,
+        out=outM
+    );
+
+    // Memory write: dest M
+    And(
+        a=instruction[15],
+        b=instruction[3],
+        out=writeM
+    );
+
+    // Jump conditions
+    Not(in=zr, out=notZR);
+    Not(in=ng, out=notNG);
+
+    // Positive result: not negative and not zero
+    And(
+        a=notNG,
+        b=notZR,
+        out=positive
+    );
+
+    // JGT, JEQ, JLT
+    And(
+        a=instruction[0],
+        b=positive,
+        out=jumpGT
+    );
+    And(
+        a=instruction[1],
+        b=zr,
+        out=jumpEQ
+    );
+    And(
+        a=instruction[2],
+        b=ng,
+        out=jumpLT
+    );
+
+    Or(a=jumpGT, b=jumpEQ, out=jump1);
+    Or(a=jump1, b=jumpLT, out=jumpCondition);
+
+    // Only C-instructions can jump
+    And(
+        a=instruction[15],
+        b=jumpCondition,
+        out=loadPC
+    );
+
+    // Program counter
+    PC(
+        in=aReg,
+        load=loadPC,
+        inc=true,
+        reset=reset,
+        out[0..14]=pc
+    );
 }
